@@ -1,0 +1,145 @@
+CREATE OR REPLACE FUNCTION ADMIN.DATA_PUMP_HELPER(
+  i_debug_dump_output   IN  BOOLEAN  DEFAULT TRUE,              -- Debug data pump output to dbms output
+  i_job_name            IN  VARCHAR2 DEFAULT 'AA_EXPORT',       -- Data pump job name
+  i_ora_directory       IN  VARCHAR2 DEFAULT 'DATA_PUMP_DIR',   -- Oracle directory name
+  i_dump_file_name      IN  VARCHAR2 DEFAULT 'exp_dump_%U.dmp', -- Dump file name
+  i_log_file_name       IN  VARCHAR2 DEFAULT 'exp_dump_%U.log', -- Log file name
+  i_schema_list         IN  VARCHAR2 DEFAULT NULL,              -- Schema list
+  i_operation           IN  VARCHAR2 DEFAULT 'export',          -- export, import or sqlfile
+  i_job_mode            IN  VARCHAR2 DEFAULT 'schema',          -- full, schema, table
+  i_table               IN  VARCHAR2 DEFAULT NULL,              -- Table list for 'table' job mode
+  i_parallel            IN  NUMBER   DEFAULT 1,                 -- Parallel processung number
+  o_dump_output         OUT CLOB                                -- Data pump output content
+) RETURN VARCHAR2 IS
+  -- REQUIRED DIRECT ROLE GRANT: grant create table to ADMIN;
+  -- select t.* from dba_directories t order by t.owner, t.directory_name;
+  
+  c_debug_prefix        CONSTANT VARCHAR2(100) := '[DataPumpHelper] ';
+  c_newline             VARCHAR2(10) := CHR(13);
+  v_handler             NUMBER;        -- Data pump handler
+  v_percent_done        NUMBER;        -- Percentage of job complete
+  v_job_state           VARCHAR2(30);  -- To keep track of job state
+  v_job_status          ku$_JobStatus; -- The job status from get_status
+  v_status              ku$_Status;    -- The status object returned by get_status
+  v_log_entry           ku$_LogEntry;  -- Log entry
+  v_ind                 NUMBER;
+  
+  PROCEDURE print_parameters IS
+    v_rpad_size NUMBER := 20 + LENGTH(c_debug_prefix);
+    v_rpad_char VARCHAR2(1) := ' ';
+  BEGIN
+    DBMS_OUTPUT.put_line(c_debug_prefix || 'Parameters:');
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_job_name',v_rpad_size,v_rpad_char) || i_job_name);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_ora_directory',v_rpad_size,v_rpad_char) || i_ora_directory);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_dump_file_name',v_rpad_size,v_rpad_char) || i_dump_file_name);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_log_file_name',v_rpad_size,v_rpad_char) || i_log_file_name);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_schema_list',v_rpad_size,v_rpad_char) || i_schema_list);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_operation',v_rpad_size,v_rpad_char) || i_operation);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_job_mode',v_rpad_size,v_rpad_char)|| i_job_mode);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_table',v_rpad_size,v_rpad_char) || i_table);
+    DBMS_OUTPUT.put_line(RPAD(c_debug_prefix || '  v_parallel',v_rpad_size,v_rpad_char) || i_parallel);
+  END;
+  
+  PROCEDURE dump_progress(i_message IN VARCHAR2, i_use_prefix IN BOOLEAN DEFAULT TRUE) IS
+  BEGIN
+    IF i_use_prefix THEN
+      DBMS_OUTPUT.PUT_LINE(c_debug_prefix || i_message);
+    ELSE
+      DBMS_OUTPUT.PUT_LINE(i_message);
+    END IF;
+  END;
+BEGIN
+  DBMS_OUTPUT.ENABLE(NULL);
+  print_parameters();
+  DBMS_LOB.createtemporary(o_dump_output, false);
+  
+  -- Opening data pump process
+  v_handler := DBMS_DATAPUMP.open(
+    operation => i_operation, -- Oparation could be export, import or sqlfile
+    job_mode  => i_job_mode,  -- Could be full, schema, table, tablespace or transportable
+    job_name  => i_job_name,  -- Name of the job
+    version   => 'LATEST');
+  dump_progress('Data Pump opened, v_handler=' || v_handler);
+  
+  -- Parallel configuration
+  DBMS_DATAPUMP.SET_PARALLEL(handle => v_handler, degree => i_parallel);
+  
+  -- File configuration
+  DBMS_DATAPUMP.ADD_FILE(handle => v_handler, filename => i_dump_file_name, directory => i_ora_directory, filetype => DBMS_DATAPUMP.ku$_file_type_dump_file, reusefile => 1);
+  DBMS_DATAPUMP.ADD_FILE(handle => v_handler, filename => i_log_file_name, directory => i_ora_directory, filetype => DBMS_DATAPUMP.ku$_file_type_log_file);
+  
+  -- Schema definition
+  --DBMS_DATAPUMP.METADATA_FILTER(handle => v_handler, name => 'SCHEMA_EXPR', value => 'IN (''DUMP_MASTER'')');
+  IF i_schema_list IS NOT NULL THEN
+    DBMS_DATAPUMP.METADATA_FILTER(handle => v_handler, name => 'SCHEMA_LIST', value => i_schema_list);
+  END IF;
+  
+  -- Specify only one table to be exported
+  IF UPPER(i_job_mode) = 'TABLE' THEN
+    DBMS_DATAPUMP.METADATA_FILTER(handle => v_handler, name => 'NAME_LIST', value => i_table);
+  END IF;
+  
+  -- Setting parameters
+  --DBMS_DATAPUMP.set_parameter (handle => v_handler, name => 'TABLE_EXISTS_ACTION', value => 'REPLACE');
+  --DBMS_DATAPUMP.set_parameter(handle => v_handler, name => 'COMPRESSION', value => 'ALL');
+  
+  -- Starting data pump job
+  DBMS_DATAPUMP.START_JOB(handle => v_handler);
+  DBMS_APPLICATION_INFO.SET_MODULE(i_job_name, 'STARTED');
+  dump_progress('Data Pump started');
+  IF i_debug_dump_output THEN
+    dump_progress('', false);
+  END IF;
+  
+  -- Waiting for dump processing
+  v_percent_done := 0;
+  v_job_state := 'UNDEFINED';
+  WHILE (v_job_state != 'COMPLETED' AND v_job_state != 'STOPPED' /*AND v_job_state != 'NOT RUNNING'*/) LOOP
+    DBMS_DATAPUMP.get_status(
+      v_handler,
+      DBMS_DATAPUMP.ku$_status_job_error + DBMS_DATAPUMP.ku$_status_job_status + DBMS_DATAPUMP.ku$_status_wip,
+      -1,
+      v_job_state,
+      v_status);
+    v_job_status := v_status.job_status;
+    
+    IF v_job_status.percent_done != v_percent_done THEN
+      IF i_debug_dump_output THEN
+        dump_progress('*** Job percent done = ' || TO_CHAR(v_job_status.percent_done));
+      END IF;
+      v_percent_done := v_job_status.percent_done;
+      DBMS_APPLICATION_INFO.SET_MODULE(i_job_name, TO_CHAR(v_job_status.percent_done) || '%');
+    END IF;
+    
+    IF (BITAND(v_status.mask, DBMS_DATAPUMP.ku$_status_wip) != 0) THEN
+      v_log_entry := v_status.wip;
+    ELSE
+      IF (BITAND(v_status.mask, DBMS_DATAPUMP.ku$_status_job_error) != 0) THEN
+        v_log_entry := v_status.error;
+      ELSE
+        v_log_entry := NULL;
+      END IF;
+    END IF;
+    
+    IF (v_log_entry IS NOT NULL) THEN
+      v_ind := v_log_entry.first;
+      WHILE (v_ind IS NOT NULL) LOOP
+        o_dump_output := o_dump_output || v_log_entry(v_ind).logtext || c_newline;
+        IF i_debug_dump_output THEN
+          dump_progress(v_log_entry(v_ind).logtext, false);
+        END IF;
+        v_ind := v_log_entry.next(v_ind);
+      END LOOP;
+    END IF;
+    
+  END LOOP;
+  DBMS_APPLICATION_INFO.SET_MODULE(i_job_name, 'READY');
+  dump_progress('Job has completed');
+  RETURN v_log_entry(v_log_entry.count).logtext;
+EXCEPTION
+  WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE('ERROR: ' || SQLERRM);
+    DBMS_DATAPUMP.detach(handle => v_handler);
+    RETURN SQLERRM;
+END;
+/

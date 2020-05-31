@@ -1,0 +1,9 @@
+CREATE PLUGGABLE DATABASE pdb2 FROM pdb1
+  FILE_NAME_CONVERT=('/u01/app/oracle/oradata/cdb1/pdb1/','/u01/app/oracle/oradata/cdb1/pdb2/');
+ALTER PLUGGABLE DATABASE pdb2 OPEN READ WRITE;
+
+--CREATE PLUGGABLE DATABASE pdb2 ADMIN USER pdb2_adm IDENTIFIED BY aa
+--  FILE_NAME_CONVERT=('/u01/app/oracle/oradata/cdb1/pdbseed/','/u01/app/oracle/oradata/cdb1/pdb2/');
+
+--ALTER SESSION SET PDB_FILE_NAME_CONVERT='/u01/app/oracle/oradata/cdb1/pdbseed/','/u01/app/oracle/oradata/cdb1/pdb3/';
+--CREATE PLUGGABLE DATABASE pdb3 ADMIN USER pdb3_adm IDENTIFIED BY aa;

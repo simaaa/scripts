@@ -1,0 +1,9 @@
+http://www.liberidu.com/blog/2010/01/17/ora-31098-internal-event-to-turn-on-xdb-tracing/
+https://docs.oracle.com/en/database/oracle/oracle-database/19/adxdb/repository-access-using-protocols.html#GUID-89D39604-B089-4A0B-B0E6-54FD7D50F764
+
+TRACE INFO: $ORACLE_BASE/diag/rdbms/<sid>/<sid>/trace/<sid>_s0000_<session-id>.trc
+
+--ALTER system SET event='31098 trace name context forever, level <level>' SCOPE=spfile;
+ALTER system SET event='31098 trace name context forever, level 0' SCOPE=spfile;
+ALTER system SET event='31098 trace name context forever, level 7' SCOPE=spfile;
+

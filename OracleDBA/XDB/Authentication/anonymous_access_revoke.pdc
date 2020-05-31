@@ -1,0 +1,26 @@
+SET SERVEROUTPUT ON
+DECLARE
+  l_configxml XMLTYPE;
+BEGIN
+  l_configxml := DBMS_XDB.cfg_get();
+  
+  IF l_configxml.existsNode('/xdbconfig/sysconfig/protocolconfig/httpconfig/allow-repository-anonymous-access') = 0 THEN
+    DBMS_OUTPUT.put_line('Element not found.');
+    RETURN;
+  END IF;
+  
+  SELECT deleteXML
+         (
+           DBMS_XDB.cfg_get(),
+           '/xdbconfig/sysconfig/protocolconfig/httpconfig/allow-repository-anonymous-access',
+           'xmlns="http://xmlns.oracle.com/xdb/xdbconfig.xsd"'
+         )
+  INTO   l_configxml
+  FROM   dual;
+  
+  DBMS_XDB.cfg_update(l_configxml);
+  DBMS_XDB.cfg_refresh;
+  DBMS_OUTPUT.put_line('Element deleted.');
+  COMMIT;
+END;
+/

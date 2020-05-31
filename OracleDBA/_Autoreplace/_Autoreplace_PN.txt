@@ -1,0 +1,2 @@
+#do=d:\$$\Backup\!_Gyüjtemény\#Oracle\_PLSQLDeveloper_Scripts\_Autoreplace\dba_objects.tpl
+#dt=d:\$$\Backup\!_Gyüjtemény\#Oracle\_PLSQLDeveloper_Scripts\_Autoreplace\dba_tables.tpl

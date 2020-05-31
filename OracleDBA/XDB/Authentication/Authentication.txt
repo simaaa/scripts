@@ -1,0 +1,34 @@
+# CHECK AUTHENTICATION CONFIGURATION
+SELECT * FROM XMLTABLE(
+  XMLNAMESPACES(DEFAULT 'http://xmlns.oracle.com/xdb/xdbconfig.xsd'),
+  '/xdbconfig/sysconfig/protocolconfig/httpconfig/authentication/allow-mechanism'  
+  PASSING DBMS_XDB_CONFIG.cfg_get() COLUMNS auth_priority  FOR ORDINALITY, auth_mechanism VARCHAR2(30) path '.'  
+);
+# CHANGE DIGEST AUTH TO BASIC
+EXEC DBMS_XDB_CONFIG.cfg_update(updateXML(DBMS_XDB_CONFIG.cfg_get(), '/xdbconfig/sysconfig/protocolconfig/httpconfig/authentication/allow-mechanism/text()', 'basic'));
+--EXEC DBMS_XDB_CONFIG.cfg_update(updateXML(DBMS_XDB_CONFIG.cfg_get(), '/xdbconfig/sysconfig/protocolconfig/httpconfig/authentication/allow-mechanism/text()', 'digest'));
+EXEC DBMS_XDB_CONFIG.cfg_refresh;
+
+# DELETE DIGEST AUTHENTICATION
+
+# ADD BASIC AUTHENTICATION
+DECLARE
+  v_config xmltype := DBMS_XDB_CONFIG.cfg_get();
+BEGIN
+  /*SELECT XMLQUERY(
+    'declare default element namespace "http://xmlns.oracle.com/xdb/xdbconfig.xsd"; (::)
+     (#ora:transform_keep_schema#){
+       copy $d := .
+       modify
+       for $i in $d/xdbconfig/sysconfig/protocolconfig/httpconfig/authentication/allow-mechanism[.="digest"]
+       return insert node element allow-mechanism {"basic"} after $i
+       return $d
+     }' PASSING v_config RETURNING CONTENT
+  )
+  INTO v_config
+  FROM dual;
+  DBMS_XDB_CONFIG.cfg_update(v_config);*/
+  DBMS_XDB_CONFIG.cfg_refresh;
+  COMMIT;
+END;
+/

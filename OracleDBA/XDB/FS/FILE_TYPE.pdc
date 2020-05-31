@@ -1,0 +1,118 @@
+i»?CREATE OR REPLACE NONEDITIONABLE TYPE FILE_TYPE AS OBJECT (
+
+  dir_name              VARCHAR2(100),
+  file_name             VARCHAR2(1000),
+  file_exist            NUMBER,
+  file_length           NUMBER,
+  file_content          CLOB,
+  is_info_readed        NUMBER,
+  is_content_readed     NUMBER,
+
+  MAP MEMBER FUNCTION get_file_name RETURN VARCHAR2,
+
+  MEMBER PROCEDURE display_details( SELF IN OUT NOCOPY FILE_TYPE ),
+  MEMBER PROCEDURE read_file_info,
+  MEMBER PROCEDURE read_from_file,
+  MEMBER PROCEDURE write_to_file( i_new_file_name VARCHAR2 ),
+
+  MEMBER FUNCTION get_content( SELF IN OUT NOCOPY FILE_TYPE ) RETURN CLOB,
+  MEMBER FUNCTION get_file( SELF IN OUT NOCOPY FILE_TYPE ) RETURN FILE_TYPE,
+
+
+  CONSTRUCTOR FUNCTION FILE_TYPE( i_file_name VARCHAR2 ) RETURN SELF AS RESULT
+
+);
+/
+
+CREATE OR REPLACE NONEDITIONABLE TYPE BODY FILE_TYPE AS
+
+  MAP MEMBER FUNCTION get_file_name RETURN VARCHAR2 IS
+  BEGIN
+    RETURN file_name;
+  END;
+
+  MEMBER PROCEDURE display_details( SELF IN OUT NOCOPY FILE_TYPE ) IS
+    c_PREFIX CONSTANT VARCHAR2(100) := '  [FILE_TYPE]  ';
+  BEGIN
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'dir_name=' || dir_name);
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'file_name=' || file_name);
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'file_exist=' || file_exist);
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'file_length=' || file_length);
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'is_info_readed=' || is_info_readed);
+    DBMS_OUTPUT.PUT_LINE(c_PREFIX || 'is_content_readed=' || is_content_readed);
+    DBMS_OUTPUT.PUT_LINE(NULL);
+  END;
+
+  MEMBER PROCEDURE read_file_info IS
+    v_file_exists    BOOLEAN;
+    v_block_size     BINARY_INTEGER;
+  BEGIN
+    UTL_FILE.FGETATTR(
+      location    => dir_name,
+      filename    => file_name,
+      fexists     => v_file_exists,
+      file_length => file_length,
+      block_size  => v_block_size);
+    IF v_file_exists THEN
+      file_exist := 1;
+    ELSE
+      file_exist := 0;
+    END IF;
+    is_info_readed := 1;
+  END;
+
+  MEMBER PROCEDURE read_from_file IS
+  BEGIN
+    file_content := DBMS_XSLPROCESSOR.read2clob(dir_name, file_name );
+    is_content_readed := 1;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RAISE_APPLICATION_ERROR(-20100, 'File read error: ' || file_name);
+  END;
+
+  MEMBER PROCEDURE write_to_file( i_new_file_name VARCHAR2 ) IS
+    v_file_name VARCHAR2(4000) := i_new_file_name;
+  BEGIN
+    IF v_file_name IS NULL THEN
+      v_file_name := file_name;
+    END IF;
+    DBMS_XSLPROCESSOR.clob2file(file_content, dir_name, v_file_name );
+  END;
+
+  MEMBER FUNCTION get_file( SELF IN OUT NOCOPY FILE_TYPE ) RETURN FILE_TYPE IS
+  BEGIN
+    IF NVL(is_info_readed,0) = 0 THEN
+      read_file_info;
+    END IF;
+    IF NVL(is_content_readed,0) = 0 THEN
+      read_from_file;
+    END IF;
+    RETURN SELF;
+  EXCEPTION
+    WHEN OTHERS THEN
+      RETURN SELF;
+  END;
+
+  MEMBER FUNCTION get_content( SELF IN OUT NOCOPY FILE_TYPE ) RETURN CLOB IS
+  BEGIN
+    IF file_exist = 1 AND NVL(is_content_readed,0) = 0 THEN
+      read_from_file;
+    END IF;
+    RETURN file_content;
+  END;
+
+  CONSTRUCTOR FUNCTION FILE_TYPE( i_file_name VARCHAR2 ) RETURN SELF AS RESULT AS
+  BEGIN
+    dir_name := ADM_FS.gc_SCRIPTS_DIR;
+    file_name := i_file_name;
+    is_info_readed := 0;
+    is_content_readed := 0;
+
+    read_file_info;
+
+    RETURN;
+  END;
+
+END;
+/
+

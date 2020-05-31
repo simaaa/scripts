@@ -1,0 +1,24 @@
+SET SERVEROUTPUT ON;
+SET FEEDBACK OFF;
+DECLARE
+  g_dump_last_line VARCHAR2(4000);
+  g_dump_output    CLOB;
+BEGIN
+  g_dump_last_line := ADMIN.DATA_PUMP_HELPER(
+    i_debug_dump_output => TRUE,
+    --i_debug_dump_output => FALSE,
+    i_job_name          => 'AA_DAILY_BACKUP',
+    i_ora_directory     => 'U02_DIR',
+    i_dump_file_name    => 'daily_backup.dmp',
+    i_log_file_name     => 'daily_backup.log',
+    i_schema_list       => 'DUMP_MASTER',
+    i_operation         => 'export',
+    i_job_mode          => 'schema',
+    --i_job_mode          => 'table',
+    --i_table             => 'employees',
+    i_parallel          => 1,
+    o_dump_output       => g_dump_output
+  );
+  DBMS_OUTPUT.PUT_LINE('LAST_LINE=' || g_dump_last_line);
+END;
+/

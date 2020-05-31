@@ -1,0 +1,21 @@
+1.
+*.memory_target=8G
+*.memory_max_target=12G
+*.sga_target=0
+*.pga_aggregate_target=0
+
+AMM és 8GB-ra áll be, de 12GB-ig bõvítheti a memóriahasználatot dinamikusan.
+Így teljesen az Oracle fogja szabályozni a memóriafoglalást.
+(Többek között az SGA és a PGA között is át tud csoportosítani, amit nem tudna AMM nélkül megtenni)
+
+
+2.
+*.memory_target=8G
+*.memory_max_target=12G
+*.sga_target=2G
+*.pga_aggregate_target=3G
+AMM, de minimum 2, illetve 3 GB-ot eleve kioszt az SGA-PGA párosnak, tehát az automatikusan osztható memória így lecsökken 3 GB-ra
+
+
+
+Számítás: memory_target = sga_target + max(pga_aggregate_target, maximum PGA allocated)

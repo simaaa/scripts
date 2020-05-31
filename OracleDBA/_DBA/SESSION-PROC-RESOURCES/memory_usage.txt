@@ -1,0 +1,15 @@
+free -mot
+free -mot -s 3
+ps -o pid,user,%mem,command ax | sort -b -k3 -r
+ps -o pid,user,%mem,command ax | sort -b -k3 -r | more
+sudo pmap <pid> | more
+sudo pmap <pid> | tail -n 1
+
+
+FREE SWAP CACHE
+     https://www.itzgeek.com/how-tos/mini-howtos/how-to-clear-swap-memory-in-linux-centos-rhel.html
+     https://www.tecmint.com/clear-ram-memory-cache-buffer-and-swap-space-on-linux
+
+swapoff -a
+swapon -a
+sudo swapoff -a && sudo swapon -a

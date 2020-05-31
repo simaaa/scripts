@@ -1,0 +1,33 @@
+-- https://docs.oracle.com/cd/E11882_01/appdev.112/e41502/adfns_web.htm#ADFNS1104
+-- https://oracle-base.com/articles/10g/dbms_epg_10gR2
+
+select DBMS_XDB.cfg_get, DBMS_XDB.getHTTPPort, DBMS_XDB.getFTPPort from dual;
+
+-- Configuration
+CREATE USER test IDENTIFIED BY test;
+--EXEC DBMS_EPG.CREATE_DAD('TEST_DAD', '/my_epg_dad/*');
+--EXEC DBMS_EPG.MAP_DAD('TEST_DAD', '/my_epg_dad/*');
+--EXEC DBMS_EPG.AUTHORIZE_DAD('TEST_DAD', 'TEST');
+--EXEC DBMS_EPG.SET_DAD_ATTRIBUTE('TEST_DAD', 'database-username', 'TEST');
+--OPTIONAL: EXEC DBMS_EPG.SET_DAD_ATTRIBUTE('TEST_DAD', 'default-page', 'home');
+
+--EXEC DBMS_EPG.DEAUTHORIZE_DAD('TEST_DAD', 'TEST');
+--EXEC DBMS_EPG.UNMAP_DAD('TEST_DAD', '/my_epg_dad/*');
+--EXEC DBMS_EPG.DROP_DAD('TEST_DAD');
+
+-- Example: http://localhost:<port>/my_epg_dad/html_page2
+-- Example: http://10.8.3.6:8080/my_epg_dad/html_page2
+CREATE OR REPLACE PROCEDURE test.html_page2 IS
+BEGIN
+  HTP.PRINT('<html>');
+  HTP.PRINT('<head>');
+  HTP.PRINT('<meta http-equiv="Content-Type" content="text/html">');
+  HTP.PRINT('<title>Title of the HTML File</title>');
+  HTP.PRINT('</head>');
+  HTP.PRINT('<body TEXT="#000000" BGCOLOR="#FFFFFF">');
+  HTP.PRINT('<h1>Heading in the HTML File</h1>');
+  HTP.PRINT('<p>Some text in the HTML file.');
+  HTP.PRINT('</body>');
+  HTP.PRINT('</html>');
+END;
+/

@@ -1,0 +1,45 @@
+ALTER SYSTEM SET recyclebin=off DEFERRED; -- RESTART REUIRED
+PURGE dba_recyclebin;
+
+ALTER PROFILE "DEFAULT" LIMIT PASSWORD_GRACE_TIME UNLIMITED;
+ALTER PROFILE "DEFAULT" LIMIT PASSWORD_LIFE_TIME UNLIMITED;
+ALTER PROFILE "DEFAULT" LIMIT PASSWORD_LOCK_TIME UNLIMITED;
+
+ALTER DATABASE FLASHBACK OFF;
+
+ALTER SYSTEM SET audit_trail=NONE SCOPE=SPFILE;
+TRUNCATE TABLE SYS.AUD$;
+
+ALTER SYSTEM SET log_archive_dest_1='LOCATION=/rdolog/ORCL/archivelog' SCOPE=BOTH;
+
+CALL DBMS_XDB.setHTTPPort(20202);
+CALL DBMS_XDB.cfg_update( updateXML(DBMS_XDB.cfg_get(),'/xdbconfig/sysconfig/call-timeout/text()','300','xmlns="http://xmlns.oracle.com/xdb/xdbconfig.xsd"') );
+COMMIT;
+
+DECLARE
+  l_servlet_name VARCHAR2(32) := 'orawsv';
+BEGIN
+  DBMS_XDB.deleteServletMapping( l_servlet_name );
+  DBMS_XDB.deleteServlet( l_servlet_name );
+  DBMS_XDB.addServlet(
+    name     => l_servlet_name,
+    language => 'C',
+    dispname => 'Oracle Query Web Service',
+    descript => 'Servlet for issuing queries as a Web Service',
+    schema   => 'XDB' );
+  DBMS_XDB.addServletSecRole( servname => l_servlet_name, rolename => 'XDB_WEBSERVICES', rolelink => 'XDB_WEBSERVICES' );
+  DBMS_XDB.addServletMapping( pattern => '/orawsv/*', name => l_servlet_name );
+  COMMIT;
+END;
+/
+
+create or replace view session_manager as
+Select audsid, "USER#", USERNAME, STATUS, SERVER, SCHEMANAME, OSUSER, MACHINE, TERMINAL, PROGRAM, TYPE, CLIENT_INFO, LOGON_TIME, LAST_CALL_ET
+FROM V_$SESSION;
+grant select on session_manager to public;
+
+grant select on v_$session to public;
+grant select on v_$sql to public;
+
+grant execute on DBMS_CRYPTO to public;
+grant execute on DBMS_LOCK to public;

@@ -1,0 +1,29 @@
+File másolás: 5p
+Kitömörítés:  5p
+  unzip p13390677_112040_Linux-x86-64_1of7.zip
+  unzip p13390677_112040_Linux-x86-64_2of7.zip
+Oracle RDBMS 11.2.0.4 telepítés: 30p
+  (Install database software only, Enterprise edition, Software location: /u01/app/oracle/product/11.2.0.4/db_1)
+  Enterprise edition -> Required for OLAP komponent (the Upgrade is causing error without OLAP)
+Linux konfiguráció, scriptek készítése: 30p
+Dump scriptek készítése: 10p
+Data Pump mentés tömörítéssel: 30~60p
+RMAN mentés: 30p
+UPGRADE (dbua): ~60p
+Ellenõrzés: 30p
+
+ÖSSZESEN: Elõkészületek: 1h, Mentés+zip (rman,dump): 1-2h, Upgrade: 1h, Ellenmõrzés: 1h ====> 4-6h
+
+
+
+Linux scriptek:
+/home/oracle/.bash_profile
+?/etc/oratab
+/etc/init.d/dbora
+dbmenu.sh
+
+
+Telepítés:
+export ORACLE_HOME=/u01/app/oracle/product/11.2.0/db_1
+export ORACLE_HOME=/u01/app/oracle/product/11.2.0.4/db_1
+$ORACLE_HOME/bin/dbua

@@ -1,0 +1,9 @@
+park/krapkrap
+bm/kpro_kbm
+blicc/ccilbccilb
+session_tar/rat_noisses
+web_intf/bew_intf
+
+
+http://192.168.31.2:10003/orawsv/WEB_INTF/PCK_PENZUGY?wsdl
+web_intf/bew_intf

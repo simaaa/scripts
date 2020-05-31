@@ -1,0 +1,2 @@
+SET SERVEROUTPUT ON;
+EXEC DBMS_DATAPUMP.detach(handle => NULL);

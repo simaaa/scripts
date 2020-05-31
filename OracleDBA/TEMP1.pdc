@@ -1,0 +1,5 @@
+ALTER SYSTEM SWITCH LOGFILE;
+select t.group#, t.type, l.archived, l.status, t.member
+from v$logfile t
+join v$log l on t.group# = l.group#
+order by t.group#, t.member;

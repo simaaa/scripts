@@ -1,0 +1,64 @@
+SET SERVEROUTPUT ON;
+SET FEEDBACK OFF;
+WHENEVER SQLERROR EXIT SQL.SQLCODE;
+DECLARE
+  --c_debug_dump          CONSTANT BOOLEAN := TRUE;
+  c_debug_dump          CONSTANT BOOLEAN := FALSE;
+  c_exp_job_name        CONSTANT VARCHAR2(1000) := 'AA_DB_CHECK';
+  c_exp_ora_directory   CONSTANT VARCHAR2(1000) := 'U02_DIR';
+  c_exp_ora_dir_path    CONSTANT VARCHAR2(1000) := NULL;
+  --c_exp_ora_dir_path    CONSTANT VARCHAR2(1000) := '/u02/data_pump'; -- If declare path, then creating "temporary" oracle directory for dump
+  c_exp_file_name_dump  CONSTANT VARCHAR2(1000) := 'db_check.dmp';
+  c_exp_file_name_log   CONSTANT VARCHAR2(1000) := 'db_check.log';
+  g_exp_schema_list     VARCHAR2(4000) := NULL; -- Using query method to building schema list
+  --g_exp_schema_list     VARCHAR2(4000) := 'DUMP_MASTER';
+  g_exp_ora_directory   VARCHAR2(1000) := c_exp_ora_directory;
+  g_dump_last_line      VARCHAR2(4000);
+  g_dump_output         CLOB;
+-- ----------------------------------------------------------------------------------------------------
+-- HELPER FUNCTIONS: DATA_PUMP_HELPER, DELETE_DUMP_FILE
+@@db_check_dump.func
+-- ====================================================================================================
+-- MAIN
+BEGIN
+  DBMS_OUTPUT.ENABLE(NULL);
+  
+  IF g_exp_schema_list IS NULL OR LENGTH(g_exp_schema_list) = 0 THEN
+    g_exp_schema_list := BUILD_SCHEMA_LIST();
+  END IF;
+  IF g_exp_schema_list IS NULL OR LENGTH(g_exp_schema_list) = 0 THEN
+    RAISE_APPLICATION_ERROR(-20100, 'The schema list is null or empty!');
+  END IF;
+  
+  IF c_exp_ora_dir_path IS NOT NULL AND LENGTH(c_exp_ora_dir_path) > 0 THEN
+    g_exp_ora_directory := c_exp_job_name || '_DIR';
+    DBMS_OUTPUT.PUT_LINE('CUSTOM_DIRECTORY=' || g_exp_ora_directory ||  ' ('  || c_exp_ora_dir_path || ')');
+    CREATE_ORA_DIRECTORY(i_directory_name => g_exp_ora_directory, i_directory_path => c_exp_ora_dir_path);
+  END IF;
+  
+  g_dump_last_line := DATA_PUMP_HELPER(
+    i_debug_dump_output => c_debug_dump,
+    i_job_name          => c_exp_job_name,
+    i_ora_directory     => g_exp_ora_directory,
+    i_dump_file_name    => c_exp_file_name_dump,
+    i_log_file_name     => c_exp_file_name_log,
+    i_schema_list       => g_exp_schema_list,
+    i_operation         => 'export',      -- export, import or sqlfile 
+    i_job_mode          => 'schema',      -- full, schema, table
+    i_parallel          => 1,
+    o_dump_output       => g_dump_output
+  );
+  DBMS_OUTPUT.PUT_LINE('LAST_LINE=' || g_dump_last_line);
+  
+  DELETE_DUMP_FILE(i_ora_directory => g_exp_ora_directory, i_file_name => c_exp_file_name_dump);
+  IF c_exp_ora_dir_path IS NOT NULL AND LENGTH(c_exp_ora_dir_path) > 0 THEN
+    DROP_ORA_DIRECTORY(i_directory_name => c_exp_job_name || '_DIR');
+  END IF;
+  
+  IF INSTR(UPPER(g_dump_last_line),'SUCCESSFUL')=0 THEN
+    DBMS_OUTPUT.PUT_LINE('ERROR: ' || g_dump_last_line);
+    RAISE_APPLICATION_ERROR(-20000, g_dump_last_line);
+  END IF;
+END;
+/
+EXIT;

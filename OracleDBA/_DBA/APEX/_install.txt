@@ -1,0 +1,24 @@
+https://oracle-base.com/articles/misc/oracle-application-express-apex-installation
+
+1) @apexins.sql tablespace_apex tablespace_files tablespace_temp images
+   @apexins.sql SYSAUX SYSAUX TEMP /i/
+   @apexins.sql APEX APEX_FILES TEMP /i/
+
+2) @apxchpwd.sql
+
+3) ??? @apex_rest_config.sql
+
+3) USING ON EPG (Embedded PLSQL Gateway)
+   !!! APEX PATH require "apex" subfolder !!!
+   @apex_epg_config.sql C:\<apex_path>
+
+3.a) ALTER USER anonymous IDENTIFIED BY aa ACCOUNT UNLOCK;
+     --ALTER USER apex_public_user IDENTIFIED BY aa ACCOUNT UNLOCK;
+
+3.b) CALL DBMS_XDB.setHTTPPort(8080);
+
+
+-- OPTIONAL NETWORK CONFIGURATION
+EXEC DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(host => '*', ace => xs$ace_type(privilege_list => xs$name_list('connect'), principal_name => 'APEX_190200', principal_type => xs_acl.ptype_db) );
+EXEC DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(host => 'localhost', ace => xs$ace_type(privilege_list => xs$name_list('connect'), principal_name => 'APEX_190200', principal_type => xs_acl.ptype_db) );
+EXEC DBMS_XDB.cfg_refresh;

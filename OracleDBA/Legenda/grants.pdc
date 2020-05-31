@@ -1,0 +1,4 @@
+--alter system set "_kgl_large_heap_warning_threshold"=10485760 scope=spfile;
+grant select on v_$process to public;
+grant select on v_$session_wait to public;
+--grant execute on LEGENDA_CENTER_TESZT.MONITOR to LEGENDA_INTF;

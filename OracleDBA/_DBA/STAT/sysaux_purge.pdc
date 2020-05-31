@@ -1,0 +1,20 @@
+Prompt --------------------------------------------------
+Prompt ----> Purging SM/ADVISORS
+EXEC DBMS_ADVISOR.DELETE_TASK('%');
+
+Prompt --------------------------------------------------
+Prompt ----> Purging SM/OPTSTAT
+EXEC DBMS_STATS.PURGE_STATS( SYSDATE );
+--EXEC DBMS_STATS.PURGE_STATS( DBMS_STATS.PURGE_ALL ); -- This will trunacte table (>=12.1)
+
+Prompt ==================================================
+Prompt ----> Purging SM/AWR
+Prompt ----> DROP AWR reports using 'sysaux_awr_snapshots.sql' script
+
+Prompt ==================================================
+Prompt ----> Reorganize tables and indexes using 'segment_usage.sql' script
+Prompt ----> Rebuild invalid indexes with 'sysaux_indexes.sql' script
+
+Prompt ==================================================
+Prompt ----> GATHER DICTIONARY STAT
+Prompt ----> EXEC DBMS_STATS.GATHER_DICTIONARY_STATS();

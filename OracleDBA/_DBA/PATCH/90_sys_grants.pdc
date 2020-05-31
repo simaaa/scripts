@@ -1,0 +1,4 @@
+grant select on dba_objects to dump_master;
+grant select on dba_tables to park;
+grant select on dba_indexes to park;
+grant select on dba_sequences to bm;

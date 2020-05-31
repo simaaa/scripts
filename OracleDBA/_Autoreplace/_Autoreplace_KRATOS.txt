@@ -1,0 +1,2 @@
+#do=e:\_sima\_PLSQLDeveloper_Scripts\_Autoreplace\dba_objects.tpl
+#dt=e:\_sima\_PLSQLDeveloper_Scripts\_Autoreplace\dba_tables.tpl

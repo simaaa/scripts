@@ -1,0 +1,45 @@
+http://oracledbajourney.blogspot.com/2014/04/how-to-enable-and-disable-database-vault.html
+
+How to Enable the database vault in Oracle 11gR2
+
+1) Stop the database, Database Control console process, and listener
+SQL> SHUTDOWN IMMEDIATE
+SQL> EXIT
+$ emctl stop dbconsole
+$ lsnrctl stop [listener_name]
+
+2) Enable Oracle Database Vault as follows:
+$ cd $ORACLE_HOME/rdbms/lib
+$ make -f ins_rdbms.mk dv_on lbac_on ioracle
+or
+chopt enable lbac
+chopt enable dv
+
+3) Restart the database, Database Control console process, and listener
+SQL> STARTUP
+SQL> EXIT
+$ emctl start dbconsole
+$ lsnrctl start [listener_name]
+
+
+
+How to Disable the database vault in Oracle 11gR2
+
+1) Stop the database, Database Control console process, and listener.
+SQL> SHUTDOWN IMMEDIATE
+SQL> EXIT
+$ emctl stop dbconsole
+$ lsnrctl stop
+
+2) Disable Oracle Database Vault as follows:
+$ cd $ORACLE_HOME/rdbms/lib
+$ make -f ins_rdbms.mk dv_off ioracle
+or
+chopt disable dv
+chopt disable lbac
+
+3) Restart the database, Database Control console process, and listener
+SQL> STARTUP
+SQL> EXIT
+$ emctl start dbconsole
+$ lsnrctl start [listener_name]

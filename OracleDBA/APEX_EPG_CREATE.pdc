@@ -1,0 +1,9 @@
+exec sys.dbms_epg.create_dad('APEX','/apex/*');
+exec sys.dbms_epg.set_dad_attribute('APEX','database-username','APEX_PUBLIC_USER');
+exec sys.dbms_epg.set_dad_attribute('APEX','default-page','apex');
+exec sys.dbms_epg.set_dad_attribute('APEX','document-table-name','wwv_flow_file_objects$');
+exec sys.dbms_epg.set_dad_attribute('APEX','nls-language','american_america.al32utf8');
+exec sys.dbms_epg.set_dad_attribute('APEX','request-validation-function','wwv_flow_epg_include_modules.authorize');
+exec sys.dbms_epg.set_dad_attribute('APEX','path-alias','r');
+exec sys.dbms_epg.set_dad_attribute('APEX','path-alias-procedure','wwv_flow.resolve_friendly_url');
+commit;

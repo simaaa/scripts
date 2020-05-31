@@ -1,0 +1,11 @@
+-- ARCHIVELOG
+shutdown immediate;
+startup mount;
+alter database archivelog;
+alter database open;
+
+-- NOARCHIVELOG
+shutdown immediate;
+startup mount;
+alter database noarchivelog;
+alter database open;

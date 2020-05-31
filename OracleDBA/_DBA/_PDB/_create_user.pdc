@@ -1,0 +1,14 @@
+alter session set "_oracle_script"=true;
+
+--drop user ADMIN cascade;
+create user ADMIN identified by aa;
+
+grant connect to ADMIN;
+grant resource to ADMIN;
+grant unlimited tablespace to ADMIN;
+
+grant select_catalog_role to ADMIN;
+grant create any directory to ADMIN;
+grant drop any directory to ADMIN;
+
+grant select on dba_directories to ADMIN;

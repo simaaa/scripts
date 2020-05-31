@@ -1,0 +1,31 @@
+SET SERVEROUTPUT ON;
+DECLARE
+  dad_list     DBMS_EPG.varchar2_table;
+  l_paths      DBMS_EPG.varchar2_table;
+  attr_names   DBMS_EPG.varchar2_table;
+  attr_values  DBMS_EPG.varchar2_table;
+BEGIN
+  DBMS_OUTPUT.put_line('Query DAD list...');
+  dbms_epg.get_dad_list(dad_list);
+  DBMS_OUTPUT.put_line('Count=' || dad_list.COUNT || CHR(13));
+  FOR i IN 1..dad_list.COUNT LOOP
+    DBMS_OUTPUT.put_line('-' || dad_list(i) || '-');
+    
+    DBMS_EPG.get_all_dad_attributes( dad_list(i), attr_names, attr_values);
+    FOR i IN 1 .. attr_names.count LOOP
+      DBMS_OUTPUT.put_line( '  ' || attr_names(i) || '=' || attr_values(i));
+    END LOOP;
+    DBMS_OUTPUT.put_line( NULL );
+    
+    DBMS_EPG.get_all_dad_mappings (
+      dad_name => dad_list(i),
+      paths    => l_paths);
+    DBMS_OUTPUT.put_line('  Mappings');
+    DBMS_OUTPUT.put_line('  ========');
+    FOR i IN 1 .. l_paths.count LOOP
+      DBMS_OUTPUT.put_line( '    ' || l_paths(i));
+    END LOOP;
+    DBMS_OUTPUT.put_line( NULL );
+  END LOOP;
+END;
+/

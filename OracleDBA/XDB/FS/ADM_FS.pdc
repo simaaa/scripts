@@ -1,0 +1,431 @@
+i»?CREATE OR REPLACE NONEDITIONABLE PACKAGE ADM_FS IS
+
+  --gc_AUTO_CREATE_DIRECTORY   CONSTANT BOOLEAN := FALSE;
+  gc_AUTO_CREATE_DIRECTORY   CONSTANT BOOLEAN := TRUE;
+  gc_SCRIPTS_XDB_PATH        CONSTANT VARCHAR2(100) := '/public/ADMIN/';
+  gc_SCRIPTS_DIR             CONSTANT VARCHAR2(100) := 'SCRIPTS_DIR';
+  --gc_SCRIPTS_PATH            CONSTANT VARCHAR2(100) := '/home/oracle/bin';
+  --gc_SCRIPTS_PATH            CONSTANT VARCHAR2(100) := 'e:\_sima\_script_mirror\';
+  gc_SCRIPTS_PATH            CONSTANT VARCHAR2(100) := 'c:\Oracle\OracleRDBMS_19.3\__scripts\';
+
+  /*TYPE typ_file_info IS RECORD (
+    file_name     VARCHAR2(1000),
+    file_exist    NUMBER,
+    file_length   NUMBER,
+    file_content  CLOB
+  );
+  TYPE tab_file_info IS TABLE OF typ_file_info;*/
+
+-- ====================================================================================================
+-- ====================================================================================================
+
+PROCEDURE log(
+  i_sender                   IN  VARCHAR2,
+  i_message                  IN  VARCHAR2 DEFAULT 'START'
+);
+
+FUNCTION get_dir_name RETURN VARCHAR2;
+
+PROCEDURE directory_init;
+
+PROCEDURE directory_purge;
+
+FUNCTION clob_to_blob(
+  i_clob                     IN  CLOB
+) RETURN BLOB;
+
+FUNCTION blob_to_clob(
+  i_blob                     IN  BLOB
+) RETURN CLOB;
+
+PROCEDURE xdb_delete_file(
+  i_file_name                IN  VARCHAR2
+);
+
+FUNCTION is_file_exists(
+  i_file_name                IN  VARCHAR2
+) RETURN NUMBER;
+
+FUNCTION get_file_length(
+  i_file_name                IN  VARCHAR2
+) RETURN NUMBER;
+
+PROCEDURE check_file(
+  i_file_name                IN  VARCHAR2
+);
+
+PROCEDURE sync_files_to_xdb;
+PROCEDURE sync_files_from_xdb;
+
+END;
+/
+
+CREATE OR REPLACE NONEDITIONABLE PACKAGE BODY ADM_FS IS
+
+  gc_NEW_LINE                CONSTANT VARCHAR2(1) := CHR(13);
+  gc_PROGRAM_NAME            CONSTANT VARCHAR2(100) := 'ADM_FS';
+  vg_TEMP                    VARCHAR2(4000);
+-- ====================================================================================================
+-- ====================================================================================================
+
+-- ====================================================================================================
+PROCEDURE log(
+  i_sender                   IN  VARCHAR2,
+  i_message                  IN  VARCHAR2 DEFAULT 'START'
+) IS
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('[' || gc_PROGRAM_NAME || '.' || i_sender || '] ' || i_message);
+END;
+
+-- ====================================================================================================
+FUNCTION get_dir_name RETURN VARCHAR2 IS
+BEGIN
+  RETURN gc_SCRIPTS_DIR;
+END;
+
+-- ====================================================================================================
+PROCEDURE create_dir IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'create_dir';
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Creating directory ' || gc_SCRIPTS_DIR || ' for ''' || gc_SCRIPTS_PATH || '''');
+  EXECUTE IMMEDIATE 'CREATE OR REPLACE DIRECTORY ' || gc_SCRIPTS_DIR || ' AS ''' || gc_SCRIPTS_PATH || '''';
+END;
+
+-- ====================================================================================================
+PROCEDURE drop_dir IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'drop_dir';
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Dropping directory: ' || gc_SCRIPTS_DIR);
+  EXECUTE IMMEDIATE 'DROP DIRECTORY ' || gc_SCRIPTS_DIR;
+END;
+
+-- ====================================================================================================
+PROCEDURE directory_init IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'directory_init';
+BEGIN
+  LOG(c_PROGRAM_NAME);
+  BEGIN
+    SELECT t.directory_path INTO vg_TEMP FROM dba_directories t WHERE t.directory_name = gc_SCRIPTS_DIR;
+    IF vg_TEMP != gc_SCRIPTS_PATH THEN
+      drop_dir;
+      create_dir;
+    END IF;
+  EXCEPTION
+    WHEN no_data_found THEN
+      create_dir;
+  END;
+END;
+
+-- ====================================================================================================
+PROCEDURE directory_purge IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'directory_purge';
+BEGIN
+  LOG(c_PROGRAM_NAME);
+  BEGIN
+    SELECT t.directory_path INTO vg_TEMP FROM dba_directories t WHERE t.directory_name = gc_SCRIPTS_DIR;
+    drop_dir;
+  EXCEPTION
+    WHEN no_data_found THEN
+      RETURN;
+  END;
+END;
+
+-- ====================================================================================================
+PROCEDURE xdb_delete_file(
+  i_file_name                IN  VARCHAR2
+) IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'xdb_delete_file';
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Delete file from XDB: ' || i_file_name);
+  DELETE FROM RESOURCE_VIEW WHERE equals_path(RES, gc_SCRIPTS_XDB_PATH || i_file_name) = 1;
+  COMMIT;
+END;
+
+-- ====================================================================================================
+FUNCTION xdb_get_file_content(
+  i_file_name                IN  VARCHAR2
+) RETURN CLOB IS
+  v_clob                     CLOB;
+  v_blob                     BLOB;
+BEGIN
+  SELECT
+    CASE WHEN ExistsNode(rv.res,'/Resource/Contents/binary') = 0 THEN content_clob END                      AS content_clob,
+    CASE WHEN ExistsNode(rv.res,'/Resource/Contents/binary') = 1 THEN ADM_FS.clob_to_blob(content_clob) END AS content_blob
+  INTO v_clob, v_blob
+  FROM resource_view rv, XmlTable( '/' passing extract(rv.res, '/Resource/Contents') columns content_clob clob path '/*')
+  WHERE equals_path(rv.res,gc_SCRIPTS_XDB_PATH || i_file_name) = 1;
+  RETURN v_clob;
+END;
+
+-- ====================================================================================================
+-- ====================================================================================================
+-- ====================================================================================================
+FUNCTION clob_to_blob(
+  i_clob                     IN  CLOB
+) RETURN BLOB IS
+  v_blob                     BLOB;
+BEGIN
+  DBMS_LOB.CREATETEMPORARY( v_blob, false );
+  FOR i IN 0 .. TRUNC( LENGTH(i_clob) / 4000 ) LOOP
+    DBMS_LOB.APPEND( v_blob, TO_BLOB( HEXTORAW( TO_CHAR( SUBSTR( i_clob, i * 4000 + 1, 4000 ) ) ) ) );
+  END LOOP;
+  RETURN v_blob;
+END;
+
+-- ====================================================================================================
+FUNCTION blob_to_clob(
+  i_blob                     IN  BLOB
+) RETURN CLOB IS
+  v_clob                     CLOB;
+  v_varchar                  VARCHAR2(32767);
+  v_start                    PLS_INTEGER := 1;
+  v_buffer                   PLS_INTEGER := 32767;
+
+  /*v_dest_offsset integer := 1;
+  v_src_offsset  integer := 1;
+  v_lang_context integer := dbms_lob.default_lang_ctx;
+  v_warning      integer;*/
+BEGIN
+  DBMS_LOB.CREATETEMPORARY( v_clob, false );
+
+  /*DBMS_LOB.ConvertToClob(
+    dest_lob     => v_clob,
+    src_blob     => i_blob,
+    amount       => DBMS_LOB.lobmaxsize,
+    dest_offset  => v_dest_offsset,
+    src_offset   => v_src_offsset,
+    blob_csid    => DBMS_LOB.default_csid,
+    lang_context => v_lang_context,
+    warning      => v_warning);*/
+
+  FOR i IN 1..CEIL(DBMS_LOB.GETLENGTH(i_blob) / v_buffer) LOOP
+    v_varchar := UTL_RAW.CAST_TO_VARCHAR2(DBMS_LOB.SUBSTR(i_blob, v_buffer, v_start));
+    DBMS_LOB.WRITEAPPEND(v_clob, LENGTH(v_varchar), v_varchar);
+    v_start := v_start + v_buffer;
+  END LOOP;
+  RETURN v_clob;
+END;
+
+-- ====================================================================================================
+FUNCTION compare_clobs(
+  i_clob1                    IN  CLOB,
+  i_clob2                    IN  CLOB
+) RETURN NUMBER IS
+BEGIN
+  IF DBMS_LOB.COMPARE( NVL(i_clob1,'NULL'), NVL(i_clob2,'NULL') ) = 0 THEN
+    RETURN 1;
+  END IF;
+  RETURN 0;
+END;
+
+-- ====================================================================================================
+FUNCTION is_file_exists(
+  i_file_name                IN  VARCHAR2
+) RETURN NUMBER IS
+  v_file_exists              BOOLEAN;
+  v_file_length              NUMBER;
+  v_block_size               BINARY_INTEGER;
+BEGIN
+  UTL_FILE.FGETATTR(
+    location    => gc_SCRIPTS_DIR,
+    filename    => i_file_name,
+    fexists     => v_file_exists,
+    file_length => v_file_length,
+    block_size  => v_block_size);
+  IF v_file_exists THEN
+    RETURN 1;
+  END IF;
+  RETURN 0;
+END;
+
+-- ====================================================================================================
+FUNCTION get_file_length(
+  i_file_name                IN  VARCHAR2
+) RETURN NUMBER IS
+  v_file_exists              BOOLEAN;
+  v_file_length              NUMBER;
+  v_block_size               BINARY_INTEGER;
+BEGIN
+  UTL_FILE.FGETATTR(
+    location    => gc_SCRIPTS_DIR,
+    filename    => i_file_name,
+    fexists     => v_file_exists,
+    file_length => v_file_length,
+    block_size  => v_block_size);
+  RETURN v_file_length;
+END;
+
+-- ====================================================================================================
+-- ====================================================================================================
+-- ====================================================================================================
+PROCEDURE check_file(
+  i_file_name                IN  VARCHAR2
+) IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'check_file';
+  v_file_info      FILE_TYPE;
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Checking file: ' ||i_file_name);
+
+  LOG(c_PROGRAM_NAME, 'Directory init');
+  directory_init;
+
+  LOG(c_PROGRAM_NAME, 'Configure file object');
+  v_file_info := new FILE_TYPE(i_file_name);
+  v_file_info.display_details;
+
+  LOG(c_PROGRAM_NAME, 'Reading file info');
+  v_file_info.read_file_info;
+  v_file_info.display_details;
+
+  LOG(c_PROGRAM_NAME, 'Reading file content');
+  v_file_info.read_from_file;
+  FILE_TYPE.display_details(v_file_info);
+
+  LOG(c_PROGRAM_NAME, 'file_compare=' || compare_clobs(v_file_info.file_content, DBMS_XSLPROCESSOR.read2clob(gc_SCRIPTS_DIR, i_file_name )));
+  LOG(c_PROGRAM_NAME, 'file_compare=' || compare_clobs(v_file_info.file_content, DBMS_XSLPROCESSOR.read2clob(gc_SCRIPTS_DIR, 'aa.txt' )));
+
+  --v_file_info.write_to_file(i_file_name||'.new');
+  --LOG(c_PROGRAM_NAME, SUBSTR(v_file_info.file_content,1,4000));
+
+  IF NOT gc_AUTO_CREATE_DIRECTORY THEN
+    LOG(c_PROGRAM_NAME, 'Directory purge');
+    directory_purge;
+  END IF;
+EXCEPTION
+  WHEN OTHERS THEN
+    LOG(c_PROGRAM_NAME, 'Directory purge');
+    directory_purge;
+    LOG(c_PROGRAM_NAME, 'Error while checking file!' || gc_NEW_LINE || DBMS_UTILITY.format_error_stack || DBMS_UTILITY.format_error_backtrace);
+END;
+
+-- ====================================================================================================
+PROCEDURE sync_files_to_xdb IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'sync_files_to_xdb';
+  v_compare                  NUMBER;
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Syncronize files in ''' || gc_SCRIPTS_PATH || ''' directory to XDB');
+
+  FOR rec IN (
+    SELECT
+      --t.*,
+      t.any_path, t.display_name, t.content_type, t.is_file_exist, t.file_length, t.is_binary, t.is_text, t.is_xml, t.is_image, t.is_compressed,
+      CASE
+        WHEN t.is_binary = 0 AND t.is_text = 1 THEN t.content_clob
+        WHEN t.is_binary = 0 AND t.is_xml = 1 THEN t.res.getClobVal()
+        WHEN t.is_binary = 1 AND t.content_type = 'application/octet-stream' THEN ADM_FS.blob_to_clob(t.content_blob)
+      END AS content_clob_all,
+      t.content_blob,
+      CASE
+        WHEN t.is_file_exist = 1 AND t.file_length > 0 THEN DBMS_XSLPROCESSOR.read2clob(ADM_FS.get_dir_name, t.display_name)
+      END AS file_content
+    FROM (
+      SELECT
+        rv.any_path                                           AS any_path,
+        rv.res                                                AS res,
+        rv.display_name                                       AS display_name,
+        rv.content_type                                       AS content_type,
+        ADM_FS.is_file_exists(rv.display_name)                AS is_file_exist,
+        ADM_FS.get_file_length(rv.display_name)               AS file_length,
+        rv.is_binary                                          AS is_binary,
+        DECODE(INSTR(LOWER(content_type),'text/plain'),0,0,1) AS is_text,
+        DECODE(INSTR(LOWER(content_type),'xml'),0,0,1)        AS is_xml,
+        DECODE(INSTR(LOWER(content_type),'image'),0,0,1)      AS is_image,
+        DECODE(INSTR(LOWER(content_type),'compressed'),0,0,1) AS is_compressed,
+        CASE WHEN rv.is_binary = 0 THEN rv.content_clob END                      AS content_clob,
+        CASE WHEN rv.is_binary = 1 THEN ADM_FS.clob_to_blob(rv.content_clob) END AS content_blob
+      FROM (
+        SELECT
+          any_path,
+          res,
+          ExtractValue(res,'/Resource/DisplayName')   AS display_name,
+          ExtractValue(res,'/Resource/ContentType')   AS content_type,
+          ExistsNode(res,'/Resource/Contents/binary') AS is_binary,
+          content_clob
+        FROM resource_view, XmlTable('/' passing extract(res, '/Resource/Contents') columns content_clob clob path '/*')
+      ) rv
+    ) t
+    --WHERE under_path(t.res, '/public/ADMIN/') = 1
+    WHERE under_path(t.res, gc_SCRIPTS_XDB_PATH) = 1
+    --AND equals_path(t.res, '/public/ADMIN/.env.sh') = 1
+    --AND t.any_path LIKE '/public/ADMIN/m%'
+    ORDER BY t.any_path
+  ) LOOP
+    LOG(c_PROGRAM_NAME, rec.display_name);
+    IF rec.is_file_exist = 1 THEN
+      v_compare := compare_clobs(rec.content_clob_all, rec.file_content);
+      LOG(c_PROGRAM_NAME, '  compare=' || v_compare);
+    END IF;
+  END LOOP;
+END;
+
+-- ====================================================================================================
+PROCEDURE sync_files_from_xdb IS
+  c_PROGRAM_NAME             CONSTANT VARCHAR2(100) := 'sync_files_to_xdb';
+  v_compare                  NUMBER;
+BEGIN
+  LOG(c_PROGRAM_NAME, 'Syncronize files in ''' || gc_SCRIPTS_PATH || ''' directory to XDB');
+
+  FOR rec IN (
+    SELECT
+      --t.*,
+      t.any_path, t.display_name, t.content_type, t.is_file_exist, t.file_length, t.is_binary, t.is_text, t.is_xml, t.is_image, t.is_compressed,
+      CASE
+        WHEN t.is_binary = 0 AND t.is_text = 1 THEN t.content_clob
+        WHEN t.is_binary = 0 AND t.is_xml = 1 THEN t.res.getClobVal()
+        WHEN t.is_binary = 1 AND t.content_type = 'application/octet-stream' THEN ADM_FS.blob_to_clob(t.content_blob)
+      END AS content_clob_all,
+      t.content_blob,
+      CASE
+        WHEN t.is_file_exist = 1 AND t.file_length > 0 THEN DBMS_XSLPROCESSOR.read2clob(ADM_FS.get_dir_name, t.display_name)
+      END AS file_content
+    FROM (
+      SELECT
+        rv.any_path                                           AS any_path,
+        rv.res                                                AS res,
+        rv.display_name                                       AS display_name,
+        rv.content_type                                       AS content_type,
+        ADM_FS.is_file_exists(rv.display_name)                AS is_file_exist,
+        ADM_FS.get_file_length(rv.display_name)               AS file_length,
+        rv.is_binary                                          AS is_binary,
+        DECODE(INSTR(LOWER(content_type),'text/plain'),0,0,1) AS is_text,
+        DECODE(INSTR(LOWER(content_type),'xml'),0,0,1)        AS is_xml,
+        DECODE(INSTR(LOWER(content_type),'image'),0,0,1)      AS is_image,
+        DECODE(INSTR(LOWER(content_type),'compressed'),0,0,1) AS is_compressed,
+        CASE WHEN rv.is_binary = 0 THEN rv.content_clob END                      AS content_clob,
+        CASE WHEN rv.is_binary = 1 THEN ADM_FS.clob_to_blob(rv.content_clob) END AS content_blob
+      FROM (
+        SELECT
+          any_path,
+          res,
+          ExtractValue(res,'/Resource/DisplayName')   AS display_name,
+          ExtractValue(res,'/Resource/ContentType')   AS content_type,
+          ExistsNode(res,'/Resource/Contents/binary') AS is_binary,
+          content_clob
+        FROM resource_view, XmlTable('/' passing extract(res, '/Resource/Contents') columns content_clob clob path '/*')
+      ) rv
+    ) t
+    --WHERE under_path(t.res, '/public/ADMIN/') = 1
+    WHERE under_path(t.res, gc_SCRIPTS_XDB_PATH) = 1
+    --AND equals_path(t.res, '/public/ADMIN/.env.sh') = 1
+    --AND t.any_path LIKE '/public/ADMIN/m%'
+    AND ( t.display_name LIKE '%.sh' OR t.display_name LIKE '%.txt' )
+    ORDER BY t.any_path
+  ) LOOP
+    LOG(c_PROGRAM_NAME, rec.display_name);
+    IF rec.is_file_exist = 1 AND rec.is_image = 0 AND rec.is_compressed = 0 THEN
+      v_compare := compare_clobs(rec.content_clob_all, rec.file_content);
+      LOG(c_PROGRAM_NAME, '  compare=' || v_compare);
+      DBMS_XSLPROCESSOR.clob2file(rec.content_clob_all, ADM_FS.get_dir_name, rec.display_name);
+    END IF;
+  END LOOP;
+END;
+
+-- ====================================================================================================
+-- ====================================================================================================
+BEGIN
+  IF gc_AUTO_CREATE_DIRECTORY THEN
+    directory_init;
+  END IF;
+END;
+/
+

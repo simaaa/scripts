@@ -1,0 +1,15 @@
+https://databaseinternalmechanism.com/oracle-backup-recovery/recovering-from-the-loss-of-redo-log-files/
+
+1) Query latest SCN "prior" STATUS=CURRENT
+   select group#, status, archived, thread#, sequence#, first_change# from v$log;
+   -- (Get the  latest SCN {first_change#} of the group just before the group  with STATUS = CURRENT)
+
+2) startup mount;
+3) restore database;
+4) recover database until scn 4881280;
+5) alter database open resetlogs;
+
+
+list incarnation of database;
+RESET DATABASE TO INCARNATION 2;
+recover database until scn 945184;
